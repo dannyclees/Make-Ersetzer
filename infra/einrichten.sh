@@ -15,7 +15,8 @@ read -r -p "E-Mail für Fehler-Alarme [consulting@cleesernster.com]: " ALERT_EMA
 ALERT_EMAIL="${ALERT_EMAIL:-consulting@cleesernster.com}"
 gcloud config set project "$PROJECT_ID" >/dev/null
 
-if [ "$(gcloud billing projects describe "$PROJECT_ID" --format 'value(billingEnabled)' 2>/dev/null)" != "True" ]; then
+gcloud services enable cloudbilling.googleapis.com >/dev/null
+if [ "$(gcloud billing projects describe "$PROJECT_ID" --format 'value(billingEnabled)')" != "True" ]; then
   echo "Für $PROJECT_ID ist keine Abrechnung aktiv. Erst Schritt 2 in docs/EINRICHTUNG.md erledigen." >&2
   exit 1
 fi
