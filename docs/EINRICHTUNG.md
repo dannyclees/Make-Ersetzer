@@ -4,6 +4,11 @@ Dauer: ca. 45 Minuten, einmalig. Du brauchst nur einen Browser. Alle Befehle
 laufen in der **Google Cloud Shell**, einem Terminal im Browser, das Google
 gratis stellt. Auf deinem Rechner musst du nichts installieren.
 
+**Kurzweg:** Schritt 1, 2 und 5a/5b im Browser erledigen, die JSON-Datei aus 5b in
+die Cloud Shell hochladen und dann nur noch
+`git clone https://github.com/dannyclees/Make-Ersetzer.git && cd Make-Ersetzer && bash infra/einrichten.sh`.
+Das Skript fragt alles Weitere ab und erledigt Schritt 3, 4 und 5c in einem Rutsch.
+
 Mach alles mit dem Google-Konto, dem der Drive-Ordner **„Anfragen Doks“**
 gehört (`danny.clees.ypr@gmail.com`).
 
