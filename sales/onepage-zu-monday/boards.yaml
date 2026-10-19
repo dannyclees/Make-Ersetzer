@@ -1,0 +1,68 @@
+# Wohin welche Anfrage geht.
+#
+# `match`: reguläre Ausdrücke (ohne Groß/Klein), die gegen Formularname,
+# Seiten-URL und ähnliche Felder der OnePage-Anfrage geprüft werden.
+# Die erste Kategorie mit Treffer gewinnt.
+#
+# Spalten-IDs stammen aus monday (Board-Info). Fehlt eine Spalte, wird sie
+# einfach nicht befüllt.
+
+drive_folder_id: 1iQDNadBBKxeeyK61jeuYfU4RLecoQYVY   # "Anfragen Doks"
+timezone: Europe/Luxembourg
+
+categories:
+  badezimmer:
+    label: Badezimmer
+    match: ['badezimmer', '\bbad\b', 'salle[- ]de[- ]bain']
+    board_id: 1476899054
+    group_id: topics
+    status_label: Neue Anfrage eingegangen
+    columns:
+      date: datum
+      status: status
+      auftrag: text__1
+      phone: telefon__1
+      email: e_mail__1
+      file: datei__1
+
+  klima:
+    label: Klima
+    match: ['klima', 'climati']
+    board_id: 1455035818
+    group_id: group_mkrmf5kw
+    status_label: Neue Anfrage eingegangen
+    columns:
+      date: datum
+      status: status51
+      auftrag: text
+      phone: contact_phone
+      email: contact_email
+      file: datei
+
+  innenausbau:
+    label: Innenausbau
+    match: ['innenausbau', 'renovierung', 'spanndecke', 'maler', 'trockenbau']
+    board_id: 5089739067
+    group_id: topics
+    status_label: Neue Anfrage eingegangen
+    columns:
+      date: datum
+      status: status
+      auftrag: text__1
+      phone: telefon__1
+      email: e_mail__1
+      file: datei__1
+
+  waermepumpe:
+    label: Wärmepumpe
+    match: ['w(ä|ae|a)rmepumpe', 'onebase', 'heizung', 'pompe[- ]à[- ]chaleur']
+    board_id: 1455035816
+    group_id: group_mkzcab87
+    status_label: Neues Lead
+    columns:
+      date: date_mkzcaqym
+      status: lead_status
+      auftrag: text_mm23gemn
+      phone: lead_phone
+      email: lead_email
+      file: file_mkzc58m8

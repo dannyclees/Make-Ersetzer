@@ -1,0 +1,20 @@
+# Steckbrief des Ablaufs. scripts/deploy_flow.py liest diese Datei.
+name: onepage-zu-monday
+abteilung: sales
+beschreibung: >
+  Neue Anfrage aus dem OnePage-CRM (hausman.lu) -> Google-Doc mit allen
+  Antworten im Ordner "Anfragen Doks" + Eintrag im passenden monday-Board
+  (Badezimmer, Klima, Innenausbau, Wärmepumpe).
+trigger: webhook            # OnePage ruft POST /webhook?token=... auf
+typ: service                # Cloud Run Service (HTTP)
+oeffentlich: true           # OnePage muss die URL ohne Google-Login erreichen; Schutz über Token
+secrets:                    # Umgebungsvariable: Secret-Manager-Name
+  MONDAY_API_TOKEN: monday-api-token
+  GOOGLE_OAUTH_USER: google-oauth-user
+  ONEPAGE_WEBHOOK_TOKEN: onepage-webhook-token
+env:
+  LOG_PAYLOAD: "1"          # Einrichtungsphase: komplettes Payload loggen. Nach Pilot auf "0".
+ressourcen:
+  memory: 512Mi
+  cpu: "1"
+  max_instances: 3

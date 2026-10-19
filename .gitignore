@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.env
+*.env
+# Zugangsdaten gehören in den Secret Manager, nie ins Repo
+client_secret*.json
+credentials*.json
+token*.json
+service-account*.json

@@ -1,0 +1,66 @@
+name: Deploy
+
+# Jeder Push auf main testet und deployt die geänderten Abläufe nach Cloud Run.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      flow:
+        description: "Ablauf-Ordner (z. B. sales/onepage-zu-monday), leer = alle"
+        required: false
+
+permissions:
+  contents: read
+  id-token: write   # für die schlüssellose Anmeldung bei Google Cloud
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      flows: ${{ steps.flows.outputs.flows }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest $(for r in */*/requirements.txt; do echo "-r $r"; done)
+      - run: bash scripts/test_all.sh
+      - id: flows
+        env:
+          INPUT_FLOW: ${{ inputs.flow }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$INPUT_FLOW" ]; then
+            test -f "$INPUT_FLOW/flow.yaml" || { echo "Kein Ablauf: $INPUT_FLOW"; exit 1; }
+            echo "flows=[\"$INPUT_FLOW\"]" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "flows=$(python scripts/changed_flows.py)" >> "$GITHUB_OUTPUT"
+          else
+            echo "flows=$(python scripts/changed_flows.py "$BEFORE" "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.flows != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flow: ${{ fromJson(needs.plan.outputs.flows) }}
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+      - run: pip install pyyaml
+      - run: python scripts/deploy_flow.py "${{ matrix.flow }}"
