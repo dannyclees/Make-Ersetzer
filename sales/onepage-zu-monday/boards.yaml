@@ -1,18 +1,42 @@
 # Wohin welche Anfrage geht.
 #
-# `match`: reguläre Ausdrücke (ohne Groß/Klein), die gegen Formularname,
-# Seiten-URL und ähnliche Felder der OnePage-Anfrage geprüft werden.
-# Die erste Kategorie mit Treffer gewinnt.
+# Alle Anfragen kommen über einen OnePage-Prozess ("Website-Anfrage").
+# Die Kategorie wird in dieser Reihenfolge bestimmt (siehe lead.route):
+#   1. `bereich`: Antwort auf die Frage `bereich_frage` (allgemeiner Fragebogen)
+#   2. `fragen`:  Fragen, die nur im Fragebogen dieser Kategorie vorkommen
+#   3. `match`:   Formularname / Seiten-URL
+# Alles sind reguläre Ausdrücke, Groß/Klein egal. Abgeleitet aus den bisherigen
+# Anfrage-Docs in "Anfragen Doks" und ihrer Ablage in monday.
 #
-# Spalten-IDs stammen aus monday (Board-Info). Fehlt eine Spalte, wird sie
-# einfach nicht befüllt.
+# Spalten-IDs stammen aus monday. Fehlt eine Spalte, wird sie nicht befüllt.
 
 drive_folder_id: 1iQDNadBBKxeeyK61jeuYfU4RLecoQYVY   # "Anfragen Doks"
 timezone: Europe/Luxembourg
+bereich_frage: 'f(ü|ue)r welchen bereich interessierst'
 
 categories:
+  recruiting:
+    label: Recruiting
+    fragen: ['berufserfahrung', 'uns verstärken', 'bei uns starten', 'führerschein', 'arbeitsverhältnis',
+             'berufsausbildung', 'nächsten job']
+    match: ['bewerb', 'karriere', 'job']
+    board_id: 1455039876
+    group_id: group_mm1f9hbr
+    status_label: Bewerbung eingegangen
+    name_mit_anrede: false
+    job_frage: 'in welchem bereich möchtest du uns verstärken'
+    columns:
+      date: datum
+      status: status__1
+      phone: telefon__1
+      email_text: text8__1      # im Recruiting-Board ist "Email" eine Textspalte
+      job: long_text_mksr6wvq
+      file: datei__1
+
   badezimmer:
     label: Badezimmer
+    bereich: ['bad']
+    fragen: ['badezimmer']
     match: ['badezimmer', '\bbad\b', 'salle[- ]de[- ]bain']
     board_id: 1476899054
     group_id: topics
@@ -27,6 +51,8 @@ categories:
 
   klima:
     label: Klima
+    bereich: ['klima']
+    fragen: ['klima', 'kühl']
     match: ['klima', 'climati']
     board_id: 1455035818
     group_id: group_mkrmf5kw
@@ -39,22 +65,10 @@ categories:
       email: contact_email
       file: datei
 
-  innenausbau:
-    label: Innenausbau
-    match: ['innenausbau', 'renovierung', 'spanndecke', 'maler', 'trockenbau']
-    board_id: 5089739067
-    group_id: topics
-    status_label: Neue Anfrage eingegangen
-    columns:
-      date: datum
-      status: status
-      auftrag: text__1
-      phone: telefon__1
-      email: e_mail__1
-      file: datei__1
-
   waermepumpe:
     label: Wärmepumpe
+    bereich: ['heiz', 'w(ä|ae)rmepumpe', 'onebase', '\bpv\b', 'photovoltaik', 'solar']
+    fragen: ['wie heizt du', 'außendämmung', 'aussendämmung', 'verglasung', 'welche optionen nutzt']
     match: ['w(ä|ae|a)rmepumpe', 'onebase', 'heizung', 'pompe[- ]à[- ]chaleur']
     board_id: 1455035816
     group_id: group_mkzcab87
@@ -66,3 +80,19 @@ categories:
       phone: lead_phone
       email: lead_email
       file: file_mkzc58m8
+
+  innenausbau:
+    label: Innenausbau
+    bereich: ['renovier', 'spanndecke', 'maler', 'innenausbau', 'küche', 'trockenbau', 'boden']
+    fragen: ['ausbauen oder renovieren', 'räume möchtest du gestalten', 'räume sind teil']
+    match: ['innenausbau', 'renovierung', 'spanndecke', 'maler', 'trockenbau']
+    board_id: 5089739067
+    group_id: topics
+    status_label: Neue Anfrage eingegangen
+    columns:
+      date: datum
+      status: status
+      auftrag: text__1
+      phone: telefon__1
+      email: e_mail__1
+      file: datei__1

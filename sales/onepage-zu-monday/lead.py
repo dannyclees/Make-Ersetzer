@@ -18,9 +18,10 @@ _FIRST = ("vorname", "first name", "firstname", "first_name", "prénom", "prenom
 _LAST = ("nachname", "last name", "lastname", "last_name", "surname", "familienname", "nom de famille")
 _FULL = ("name", "full name", "fullname", "full_name", "vollständiger name", "nom")
 _SALUTATION = ("anrede", "salutation", "civilité")
-_ROUTING = ("form", "formular", "form_name", "formname", "page", "seite", "page_url", "url", "source",
+_ROUTING = ("process", "prozess", "pipeline", "form", "formular", "form_name", "formname", "page", "seite", "page_url", "url", "source",
             "quelle", "funnel", "kampagne", "campaign", "title", "titel", "page_title")
-_META = ("id", "uuid", "submission_id", "created_at", "updated_at", "timestamp", "date", "secret",
+_SUBMITTED = ("created_at", "submitted_at", "submission_date", "timestamp", "date", "datum", "created")
+_META = ("id", "uuid", "submission_id", "updated_at", "secret",
          "secretkey", "token", "ip", "user_agent", "useragent", "type", "event", "reason",
          "consent", "datenschutz", "privacy", "dsgvo", "gdpr", "agb")
 _LIST_KEYS = ("fields", "answers", "form_data", "formdata", "values", "questions", "data")
@@ -34,6 +35,8 @@ class Lead:
     answers: list[tuple[str, str]] = field(default_factory=list)
     routing_text: str = ""
     key: str = ""
+    salutation: str | None = None
+    submitted_at: str | None = None
 
 
 def _norm(label: str) -> str:
@@ -99,7 +102,7 @@ def payload_key(payload: dict) -> str:
 
 def parse(payload: dict) -> Lead:
     pairs = _flatten(payload)
-    email = phone = first = last = full = salutation = None
+    email = phone = first = last = full = salutation = submitted = None
     routing, answers = [], []
 
     for label, value in pairs:
@@ -117,6 +120,8 @@ def parse(payload: dict) -> Lead:
             full = value
         elif salutation is None and _is(label, _SALUTATION):
             salutation = value
+        elif submitted is None and _is(label, _SUBMITTED):
+            submitted = value
         elif _is(label, _ROUTING):
             routing.append(value)
         elif _is(label, _META):
@@ -124,16 +129,10 @@ def parse(payload: dict) -> Lead:
         else:
             answers.append((re.sub(r"^\s*\d+[\.\)]?\s*", "", label).strip(), value))
 
-    name = " ".join(p for p in (first, last) if p) or full
-    if not name and last:
-        name = f"{salutation} {last}" if salutation else last
-    if not name:
-        name = email or "Unbekannte Anfrage"
-
-    # Für die Zuordnung zählen Formular/Seite zuerst, notfalls die Antworten selbst.
-    routing_text = " | ".join(routing) or " | ".join(f"{q} {a}" for q, a in answers)
+    name = " ".join(p for p in (first, last) if p) or full or email or "Unbekannte Anfrage"
     return Lead(name=name.strip(), email=email, phone=normalize_phone(phone), answers=answers,
-                routing_text=routing_text, key=payload_key(payload))
+                routing_text=" | ".join(routing), key=payload_key(payload), salutation=salutation,
+                submitted_at=submitted)
 
 
 def normalize_phone(raw: str | None) -> str | None:
@@ -148,8 +147,34 @@ def normalize_phone(raw: str | None) -> str | None:
     return digits or None
 
 
-def route(lead: Lead, categories: dict) -> str | None:
+def route(lead: Lead, config: dict) -> str | None:
+    """Ordnet die Anfrage einem Board zu. Alle Anfragen kommen über denselben
+    OnePage-Prozess ("Website-Anfrage"); die Kategorie ergibt sich aus dem Inhalt:
+
+    1. Antwort auf "Für welchen Bereich interessierst Du Dich?" (allgemeiner Fragebogen)
+    2. sonst die Fragen selbst: jeder Fragebogen hat eigene Fragen (meiste Treffer gewinnt)
+    3. sonst Formularname / Seiten-URL
+    """
+    categories = config["categories"]
+    for question, answer in lead.answers:
+        if re.search(config["bereich_frage"], question, re.IGNORECASE):
+            for key, cat in categories.items():
+                if any(re.search(p, answer, re.IGNORECASE) for p in cat.get("bereich", [])):
+                    return key
+
+    scores = {
+        key: sum(1 for q, _ in lead.answers if any(re.search(p, q, re.IGNORECASE) for p in cat.get("fragen", [])))
+        for key, cat in categories.items()
+    }
+    best = max(scores, key=scores.get, default=None)
+    if best and scores[best] > 0:
+        return best
+
     for key, cat in categories.items():
-        if any(re.search(p, lead.routing_text, re.IGNORECASE) for p in cat["match"]):
+        if any(re.search(p, lead.routing_text, re.IGNORECASE) for p in cat.get("match", [])):
             return key
     return None
+
+
+def answer_to(lead: Lead, question_pattern: str) -> str | None:
+    return next((a for q, a in lead.answers if re.search(question_pattern, q, re.IGNORECASE)), None)

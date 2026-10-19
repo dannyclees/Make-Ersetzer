@@ -31,6 +31,36 @@ FLAT_PAYLOAD = {
 }
 
 
+def _payload(*qa, **extra):
+    fields = [{"label": "Name", "value": "Erika Beispiel"}, {"label": "E-Mail", "value": "erika@example.org"}]
+    fields += [{"label": q, "value": a} for q, a in qa]
+    return {"process": "Website-Anfrage", "fields": fields, **extra}
+
+
+@pytest.mark.parametrize("qa,expected", [
+    # allgemeiner Fragebogen: die Antwort auf "Für welchen Bereich ..." entscheidet
+    ((("1Wie bist Du auf uns aufmerksam geworden?", "Werbung"), ("2Für welchen Bereich interessierst Du Dich?", "Heizung")), "waermepumpe"),
+    ((("Für welchen Bereich interessierst Du Dich?", "Spanndecken"),), "innenausbau"),
+    ((("Für welchen Bereich interessierst Du Dich?", "Renovierungen"),), "innenausbau"),
+    ((("Für welchen Bereich interessierst Du Dich?", "Klima"),), "klima"),
+    ((("Für welchen Bereich interessierst Du Dich?", "Badezimmer"),), "badezimmer"),
+    # spezielle Fragebögen: die Fragen selbst verraten die Kategorie
+    ((("1Wie heizt Du momentan?", "Öl"), ("Hat Dein Haus eine Außendämmung?", "Nein"), ("Wie alt ist Dein Haus?", "bis 20 Jahre")), "waermepumpe"),
+    ((("Welche Art von Immobilie möchtest Du ausbauen oder renovieren?", "Haus"), ("Welche Räume sind Teil des Projekts?", "Küche")), "innenausbau"),
+    ((("Das Badezimmer wird genutzt als?", "Gästebad"), ("Wie alt ist Dein Haus?", "21-40 Jahre")), "badezimmer"),
+    ((("Hast Du eine abgeschlossene Berufsausbildung im Bereich SHK (Sanitär, Heizung, Klima)?", "Ja"),
+      ("Wie viele Jahre Berufserfahrung bringst Du mit?", "1-2 Jahre"), ("Ab wann könntest Du bei uns starten?", "sofort")), "recruiting"),
+])
+def test_route_real_questionnaires(qa, expected):
+    assert route(parse(_payload(*qa)), flow.CONFIG) == expected
+
+
+def test_process_name_not_in_doc():
+    lead = parse(_payload(("Für welchen Bereich interessierst Du Dich?", "Klima")))
+    assert lead.answers == [("Für welchen Bereich interessierst Du Dich?", "Klima")]
+    assert lead.routing_text == "Website-Anfrage"
+
+
 class FakeMonday:
     def __init__(self, existing=None, file_column_fails=False):
         self.created, self.columns, self.updates = [], [], []
@@ -80,7 +110,7 @@ def test_parse_field_list():
 def test_parse_flat_and_route():
     lead = parse(FLAT_PAYLOAD)
     assert (lead.name, lead.email, lead.phone) == ("Erika Beispiel", "erika@example.org", "491512345678")
-    assert route(lead, flow.CONFIG["categories"]) == "klima"
+    assert route(lead, flow.CONFIG) == "klima"
 
 
 @pytest.mark.parametrize("raw,expected", [("00352 691 123 456", "352691123456"), ("+352691123456", "352691123456"),
@@ -122,6 +152,31 @@ def test_file_column_fallback_posts_update():
     monday = FakeMonday(file_column_fails=True)
     flow.handle(FIELD_LIST_PAYLOAD, monday, FakeDrive(), today="2026-10-19")
     assert "docs.google.com" in monday.updates[0]
+
+
+def test_recruiting_columns_and_received_date():
+    monday = FakeMonday()
+    payload = _payload(("1In welchem Bereich möchtest Du uns verstärken?", "Handwerker"),
+                       ("Wie viele Jahre Berufserfahrung bringst Du mit?", "Mehr als 5 Jahre"),
+                       ("Besitzt Du einen gültigen Führerschein der Klasse B?", "Ja"),
+                       created_at="2026-10-17T22:30:00Z", anrede="M/Mme")
+    result = flow.handle(payload, monday, FakeDrive(), today="2026-10-19")
+    board, group, name, values = monday.created[0]
+    assert result.category == "recruiting" and (board, group) == (1455039876, "group_mm1f9hbr")
+    assert name == "Erika Beispiel"  # im Recruiting ohne Anrede
+    assert values == {
+        "status__1": {"label": "Bewerbung eingegangen"},
+        "datum": {"date": "2026-10-18"},  # 22:30 UTC = 00:30 in Luxemburg
+        "text8__1": "erika@example.org",
+        "long_text_mksr6wvq": {"text": "Handwerker"},
+    }
+
+
+def test_salutation_prefix_on_sales_boards():
+    monday = FakeMonday()
+    flow.handle(_payload(("Für welchen Bereich interessierst Du Dich?", "Heizung"), anrede="M/Mme"),
+                monday, FakeDrive(), today="2026-10-19")
+    assert monday.created[0][2] == "M/Mme Erika Beispiel"
 
 
 def test_unroutable_raises():

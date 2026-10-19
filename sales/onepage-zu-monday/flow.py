@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 import yaml
 
 from doc import render_html
-from lead import Lead, parse, route
+from lead import Lead, answer_to, parse, route
 from shared import log
 
 FLOW = "onepage-zu-monday"
@@ -29,29 +29,39 @@ class Result:
 
 def handle(payload: dict, monday, drive, config: dict = CONFIG, today: str | None = None) -> Result:
     lead = parse(payload)
-    category = route(lead, config["categories"])
+    category = route(lead, config)
     if category is None:
-        raise Unroutable(f"Keine Kategorie passt zu: {lead.routing_text[:200]!r}")
+        questions = "; ".join(q for q, _ in lead.answers)[:300]
+        raise Unroutable(f"Keine Kategorie passt. Formular: {lead.routing_text[:100]!r}, Fragen: {questions!r}")
     cat = config["categories"][category]
     cols = cat["columns"]
-    today = today or datetime.now(ZoneInfo(config["timezone"])).date().isoformat()
+    tz = ZoneInfo(config["timezone"])
+    today = today or datetime.now(tz).date().isoformat()
+    received = _local_date(lead.submitted_at, tz) or today
     log.info("Anfrage erkannt", flow=FLOW, key=lead.key, category=category, answers=len(lead.answers))
 
     doc = _ensure_doc(lead, drive, config["drive_folder_id"])
 
-    existing = _find_existing_item(lead, monday, cat, today)
+    existing = _find_existing_item(lead, monday, cat, received, today)
     if existing:
         log.info("Eintrag existiert schon, nichts doppelt angelegt", flow=FLOW, key=lead.key, item_id=existing)
         return Result("duplicate", category, existing, doc["webViewLink"])
 
-    values = {cols["status"]: {"label": cat["status_label"]}, cols["date"]: {"date": today}}
+    values = {cols["status"]: {"label": cat["status_label"]}, cols["date"]: {"date": received}}
     if cols.get("auftrag"):
         values[cols["auftrag"]] = cat["label"]
     if lead.email and cols.get("email"):
         values[cols["email"]] = {"email": lead.email, "text": lead.email}
+    if lead.email and cols.get("email_text"):
+        values[cols["email_text"]] = lead.email
     if lead.phone and cols.get("phone"):
         values[cols["phone"]] = _phone_value(lead.phone)
-    item_id = monday.create_item(cat["board_id"], cat["group_id"], lead.name, values)
+    if cols.get("job") and cat.get("job_frage") and (job := answer_to(lead, cat["job_frage"])):
+        values[cols["job"]] = {"text": job}
+    item_name = lead.name
+    if lead.salutation and cat.get("name_mit_anrede", True):
+        item_name = f"{lead.salutation} {lead.name}"
+    item_id = monday.create_item(cat["board_id"], cat["group_id"], item_name, values)
 
     _attach_doc(monday, cat, item_id, lead, doc["webViewLink"])
     log.info("Anfrage in monday angelegt", flow=FLOW, key=lead.key, board=cat["board_id"], item_id=item_id)
@@ -66,15 +76,30 @@ def _ensure_doc(lead: Lead, drive, folder_id: str) -> dict:
     return drive.create_doc_from_html(lead.name, render_html(lead), folder_id, {"lead_key": lead.key})
 
 
-def _find_existing_item(lead: Lead, monday, cat: dict, today: str) -> str | None:
-    """Gleiche E-Mail am selben Tag im selben Board = Doppel (Retry oder doppelt abgeschickt)."""
-    email_col = cat["columns"].get("email")
+def _find_existing_item(lead: Lead, monday, cat: dict, received: str, today: str) -> str | None:
+    """Gleiche E-Mail, gleiches Anfragedatum (oder heute angelegt) im selben Board = Doppel."""
+    email_col = cat["columns"].get("email") or cat["columns"].get("email_text")
     if not lead.email or not email_col:
         return None
     for item in monday.find_items(cat["board_id"], email_col, lead.email):
-        if item.get("created_at", "")[:10] >= today[:10] or _column_text(item, cat["columns"]["date"]) == today:
+        if item.get("created_at", "")[:10] == today or _column_text(item, cat["columns"]["date"]) == received:
             return item["id"]
     return None
+
+
+def _local_date(value: str | None, tz: ZoneInfo) -> str | None:
+    """Eingangszeitpunkt aus OnePage (ISO-Datum oder Unix-Zeit) -> lokales Datum JJJJ-MM-TT."""
+    if not value:
+        return None
+    try:
+        if value.replace(".", "", 1).isdigit():
+            seconds = float(value) / (1000 if float(value) > 1e11 else 1)
+            return datetime.fromtimestamp(seconds, tz).date().isoformat()
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return (dt.astimezone(tz) if dt.tzinfo else dt).date().isoformat()
+    except ValueError:
+        log.warning("Eingangsdatum nicht lesbar, nehme heute", flow=FLOW, value=value)
+        return None
 
 
 _COUNTRY_PREFIXES = {"352": "LU", "49": "DE", "32": "BE", "33": "FR", "31": "NL", "41": "CH", "43": "AT"}

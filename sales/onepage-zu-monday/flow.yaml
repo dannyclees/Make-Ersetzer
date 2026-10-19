@@ -2,9 +2,10 @@
 name: onepage-zu-monday
 abteilung: sales
 beschreibung: >
-  Neue Anfrage aus dem OnePage-CRM (hausman.lu) -> Google-Doc mit allen
-  Antworten im Ordner "Anfragen Doks" + Eintrag im passenden monday-Board
-  (Badezimmer, Klima, Innenausbau, Wärmepumpe).
+  Neue Anfrage aus dem OnePage-CRM-Prozess "Website-Anfrage" (hausman.lu)
+  -> Google-Doc mit allen Antworten im Ordner "Anfragen Doks" + Eintrag im
+  passenden monday-Board (Badezimmer, Klima, Innenausbau, Wärmepumpe, Recruiting).
+  Die Kategorie ergibt sich aus den Antworten, siehe boards.yaml.
 trigger: webhook            # OnePage ruft POST /webhook?token=... auf
 typ: service                # Cloud Run Service (HTTP)
 oeffentlich: true           # OnePage muss die URL ohne Google-Login erreichen; Schutz über Token
